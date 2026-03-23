@@ -9,7 +9,7 @@ Simple HTTP forward proxy in Go with basic SSRF protections.
 - Reads target from query parameter `url` or header `X-Target-URL`.
 - Blocks localhost, private, link-local, multicast, and other reserved IP ranges.
 - Rejects unsupported methods and hop-by-hop headers.
-- Adds/extends `X-Forwarded-For`.
+- Leaves `X-Forwarded-For` untouched.
 
 ## Requirements
 
