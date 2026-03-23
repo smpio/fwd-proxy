@@ -21,7 +21,13 @@ Simple HTTP forward proxy in Go with basic SSRF protections.
 go run .
 ```
 
-The server listens on `:8080`.
+The server listens on `:8080` by default.
+
+To start on a custom port:
+
+```bash
+go run . -port 9090
+```
 
 ## Usage
 
@@ -66,9 +72,9 @@ These checks help reduce SSRF risk but do not replace network-level egress contr
 
 ## Configuration
 
-Current configuration is defined in constants in `main.go`:
+Configuration is defined in `main.go` constants and CLI flags:
 
-- `listenAddr` (default `:8080`)
+- `-port` CLI flag (default `8080`)
 - `maxRequestBody` (default `10 MiB`)
 - `upstreamTimeout` (default `30s`)
 

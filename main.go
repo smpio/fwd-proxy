@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"context"
 	"errors"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	listenAddr      = ":8080"
+	defaultPort     = 8080
 	maxRequestBody  = 10 << 20 // 10 MiB
 	upstreamTimeout = 30 * time.Second
 )
@@ -36,6 +37,14 @@ var hopByHopHeaders = []string{
 
 func main() {
 	logger := log.New(os.Stdout, "[proxy] ", log.LstdFlags|log.Lmicroseconds)
+	port := flag.Int("port", defaultPort, "port to listen on")
+	flag.Parse()
+
+	if *port < 1 || *port > 65535 {
+		logger.Fatalf("invalid -port %d: must be in range 1..65535", *port)
+	}
+
+	listenAddr := fmt.Sprintf(":%d", *port)
 
 	resolver := &net.Resolver{}
 
