@@ -1,9 +1,9 @@
 package main
 
 import (
-	"flag"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -38,6 +38,7 @@ var hopByHopHeaders = []string{
 func main() {
 	logger := log.New(os.Stdout, "[proxy] ", log.LstdFlags|log.Lmicroseconds)
 	port := flag.Int("port", defaultPort, "port to listen on")
+	authToken := flag.String("auth-token", "", "required value for X-Fwd-Authorization header")
 	flag.Parse()
 
 	if *port < 1 || *port > 65535 {
@@ -108,6 +109,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+
+		if *authToken != "" && r.Header.Get("X-Fwd-Authorization") != *authToken {
+			http.Error(w, "fwd-proxy request unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 		if r.Method != http.MethodGet &&
 			r.Method != http.MethodPost &&
@@ -269,6 +275,9 @@ func blockedNetip(ip netip.Addr) bool {
 func copyRequestHeaders(dst, src http.Header) {
 	for k, vv := range src {
 		if strings.EqualFold(k, "Host") {
+			continue
+		}
+		if strings.EqualFold(k, "X-Fwd-Authorization") {
 			continue
 		}
 		for _, v := range vv {

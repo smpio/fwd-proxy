@@ -29,6 +29,12 @@ To start on a custom port:
 go run . -port 9090
 ```
 
+To require an auth token in `X-Fwd-Authorization`:
+
+```bash
+go run . -auth-token 'my-secret-token'
+```
+
 ## Usage
 
 Send a request to the proxy and provide the destination URL:
@@ -41,6 +47,15 @@ You can also pass the target in a header:
 
 ```bash
 curl -H "X-Target-URL: https://httpbin.org/anything" "http://localhost:8080/"
+```
+
+If started with `-auth-token`, include the auth header:
+
+```bash
+curl \
+  -H "X-Fwd-Authorization: my-secret-token" \
+  -H "X-Target-URL: https://httpbin.org/get" \
+  "http://localhost:8080/"
 ```
 
 Forward a JSON `POST` body:
@@ -75,6 +90,7 @@ These checks help reduce SSRF risk but do not replace network-level egress contr
 Configuration is defined in `main.go` constants and CLI flags:
 
 - `-port` CLI flag (default `8080`)
+- `-auth-token` CLI flag (default empty, disabled)
 - `maxRequestBody` (default `10 MiB`)
 - `upstreamTimeout` (default `30s`)
 
