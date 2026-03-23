@@ -38,7 +38,8 @@ var hopByHopHeaders = []string{
 func main() {
 	logger := log.New(os.Stdout, "[proxy] ", log.LstdFlags|log.Lmicroseconds)
 	port := flag.Int("port", defaultPort, "port to listen on")
-	authToken := flag.String("auth-token", "", "required value for X-Fwd-Authorization header")
+	envAuthToken := os.Getenv("FWD_PROXY_AUTH_TOKEN")
+	authToken := flag.String("auth-token", envAuthToken, "required value for X-Fwd-Authorization header (overrides env var)")
 	flag.Parse()
 
 	if *port < 1 || *port > 65535 {

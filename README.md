@@ -91,6 +91,7 @@ Configuration is defined in `main.go` constants and CLI flags:
 
 - `-port` CLI flag (default `8080`)
 - `-auth-token` CLI flag (default empty, disabled)
+- `FWD_PROXY_AUTH_TOKEN` env var (used when `-auth-token` is not set)
 - `maxRequestBody` (default `10 MiB`)
 - `upstreamTimeout` (default `30s`)
 
