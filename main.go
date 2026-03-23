@@ -225,14 +225,6 @@ func validateTargetURL(u *url.URL) error {
 	return nil
 }
 
-func blockedIP(ip net.IP) bool {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return true
-	}
-	return blockedNetip(addr)
-}
-
 func blockedNetip(ip netip.Addr) bool {
 	if !ip.IsValid() {
 		return true
