@@ -36,7 +36,8 @@ var hopByHopHeaders = []string{
 }
 
 func main() {
-	logger := log.New(os.Stdout, "[proxy] ", log.LstdFlags|log.Lmicroseconds)
+	logger := log.New(os.Stderr, "[proxy] ", log.LstdFlags|log.Lmicroseconds)
+	errLogger := log.New(os.Stderr, "", 0)
 	port := flag.Int("port", defaultPort, "port to listen on")
 	envAuthToken := os.Getenv("FWD_PROXY_AUTH_TOKEN")
 	authToken := flag.String("auth-token", envAuthToken, "required value for X-Fwd-Authorization header (overrides env var)")
@@ -110,8 +111,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		method := r.Method
+		targetForLog := targetRawFromRequest(r)
 
 		if *authToken != "" && r.Header.Get("X-Fwd-Authorization") != *authToken {
+			logHTTPError(errLogger, method, targetForLog, http.StatusUnauthorized)
 			http.Error(w, "fwd-proxy request unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -122,27 +126,29 @@ func main() {
 			r.Method != http.MethodPatch &&
 			r.Method != http.MethodDelete &&
 			r.Method != http.MethodHead {
+			logHTTPError(errLogger, method, targetForLog, http.StatusMethodNotAllowed)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 
-		targetRaw := strings.TrimSpace(r.URL.Query().Get("url"))
+		targetRaw := strings.TrimSpace(targetForLog)
 		if targetRaw == "" {
-			targetRaw = strings.TrimSpace(r.Header.Get("X-Target-URL"))
-		}
-		if targetRaw == "" {
+			logHTTPError(errLogger, method, targetForLog, http.StatusBadRequest)
 			http.Error(w, "missing target url", http.StatusBadRequest)
 			return
 		}
 
 		targetURL, err := url.Parse(targetRaw)
 		if err != nil {
+			logHTTPError(errLogger, method, targetForLog, http.StatusBadRequest)
 			http.Error(w, "invalid target url", http.StatusBadRequest)
 			return
 		}
 		if err := validateTargetURL(targetURL); err != nil {
+			targetForLog = targetURL.String()
+			logHTTPError(errLogger, method, targetForLog, http.StatusForbidden)
 			http.Error(w, "blocked target: "+err.Error(), http.StatusForbidden)
 			return
 		}
@@ -154,6 +160,8 @@ func main() {
 
 		upReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), body)
 		if err != nil {
+			targetForLog = targetURL.String()
+			logHTTPError(errLogger, method, targetForLog, http.StatusBadGateway)
 			http.Error(w, "failed to build upstream request", http.StatusBadGateway)
 			return
 		}
@@ -166,7 +174,8 @@ func main() {
 
 		resp, err := client.Do(upReq)
 		if err != nil {
-			logger.Printf("upstream error method=%s target=%q err=%v dur=%s", r.Method, targetURL.String(), err, time.Since(start))
+			targetForLog = targetURL.String()
+			logHTTPError(errLogger, method, targetForLog, http.StatusBadGateway)
 			http.Error(w, "upstream request failed", http.StatusBadGateway)
 			return
 		}
@@ -186,12 +195,34 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           loggingMiddleware(logger, mux),
+		Handler:           loggingMiddleware(errLogger, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	logger.Printf("listening on %s", listenAddr)
 	log.Fatal(srv.ListenAndServe())
+}
+
+func logHTTPError(errLogger *log.Logger, method, target string, status int) {
+	if target == "" {
+		target = "-"
+	}
+	now := time.Now().UTC()
+	errLogger.Printf(
+		"%s [proxy] ERR method=%s target=%q status=%d",
+		now.Format(time.RFC3339Nano),
+		method,
+		target,
+		status,
+	)
+}
+
+func targetRawFromRequest(r *http.Request) string {
+	targetRaw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if targetRaw == "" {
+		targetRaw = strings.TrimSpace(r.Header.Get("X-Target-URL"))
+	}
+	return targetRaw
 }
 
 func validateTargetURL(u *url.URL) error {
@@ -305,6 +336,7 @@ func removeHopByHop(h http.Header) {
 func loggingMiddleware(logger *log.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if slices.Contains([]string{"CONNECT", "TRACE", "OPTIONS"}, r.Method) {
+			logHTTPError(logger, r.Method, targetRawFromRequest(r), http.StatusMethodNotAllowed)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
